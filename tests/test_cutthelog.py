@@ -189,25 +189,21 @@ class TestClass(unittest.TestCase):
             with obj:
                 pass
 
-
-class TestFunctions(unittest.TestCase):
-    def test_get_position_from_cache(self):
+    def test_set_position_from_cache(self):
         def check(filename, check_res, warn=False):
+            obj = self.get_object(filename)
             with mock.patch('logging.warning') as log_warn:
-                res = ctl.get_position_from_cache(cache_file, filename)
-            self.assertEqual(res, check_res)
+                obj.set_position_from_cache(cache_file)
+            self.assertEqual(obj.get_position(), check_res)
             self.assertEqual(log_warn.called, warn)
         cache_file = os.path.join(DATADIR, 'cache')
         check('/root/hello', (50, 'Hello, world\n'))
+        check('/root/hello.2', (100, 'Hello, world!\n'))
+        check('/root/hello.3', (200, 'Hello##world!\n'))
         check('/root/no_such_file_in_cache', ctl.DEFAULT_POSITION)
         check('/root/bad_format', ctl.DEFAULT_POSITION, warn=True)
         check('/root/bad_offset', ctl.DEFAULT_POSITION, warn=True)
         check('/root/unable_to_find', ctl.DEFAULT_POSITION)
-
-    def test_save_cache(self):
-        def check(filename, check_res, warn=False):
-            with mock.patch('logging.warning') as log_warn:
-                res = ctl.get_position_from_cache(cache_file, filename)
 
 
 class TestUtil(unittest.TestCase):

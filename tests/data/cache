@@ -1,3 +1,5 @@
+/root/hello.2##100##Hello, world!
+/root/hello.3##200##Hello##world!
 /root/hello##50##Hello, world
 /root/bad_format##6943# Corrupted cache file
 /root/bad_offset##None##Good line
