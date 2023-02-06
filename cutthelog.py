@@ -6,7 +6,9 @@ from __future__ import print_function
 
 import os
 import sys
+import shutil
 import logging
+import tempfile
 import argparse
 
 
@@ -23,6 +25,7 @@ HELPS = {
 LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 CACHE_DELIMITER = '##'
+CACHE_FILENAME = '.cutthelog'
 
 
 class CutTheLog(object):
@@ -105,7 +108,7 @@ class CutTheLog(object):
 def argument_parsing():
     """Parse and return command line arguments"""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument('logfile', help=HELPS['logfile'], nargs='+')
+    parser.add_argument('logfile', help=HELPS['logfile'])
     parser.add_argument('-c', '--cache-file', help=HELPS['cache_file'])
     parser.add_argument('--cache-delimiter', help=HELPS['cache_delimiter'],
                         default=CACHE_DELIMITER)
@@ -114,43 +117,48 @@ def argument_parsing():
     parser.add_argument('-v', '--verbose', help=HELPS['verbose'], action='store_true')
     args = parser.parse_args()
     if args.cache_file is None:
-        workdir = os.getenv('HOME') or os.getcwd()
-        args.cache_file = os.path.join(workdir, '.cutthelog')
+        workdir = os.getcwd() if os.path.exists(CACHE_FILENAME) else os.getenv('HOME')
+        args.cache_file = os.path.join(workdir, CACHE_FILENAME)
     return args
 
 
-def parse_cache(cache_file, delimiter):
+def get_position_from_cache(cache_file, filename, delimiter=CACHE_DELIMITER):
     """Open cache file and return content as content as a dict"""
-    result = {}
-    if not os.path.isfile(cache_file):
-        return result
+    line_start = filename + delimiter
     try:
         with open(cache_file, 'r') as fh:
-            for index, line in enumerate(fh):
-                splited_line = line.split(delimiter, 3)
-                if len(splited_line) != 3:
+            line_iter = ((index, line) for index, line in enumerate(fh) if line.startswith(line_start))
+            index, line = next(line_iter, (None, None))
+            if line is not None:
+                splitted_line = line.split(delimiter, 3)
+                if len(splitted_line) == 3:
+                    try:
+                        return (int(splitted_line[1]), splitted_line[2])
+                    except ValueError:
+                        logging.warning('Malformed offset value %s in line #%d', splitted_line[1], index)
+                else:
                     logging.warning('Malformed cache line #%d: %s', index, line.rstrip())
-                    continue
-                filename, offset, last_line = splited_line
-                try:
-                    offset = int(offset)
-                except ValueError:
-                    logging.warning('Malformed offset value %s in line #%d', offset, index)
-                    continue
-                result[filename] = (offset, last_line)
     except EnvironmentError as err:
         logging.warning('Failed to read cache: %s', err)
-    return result
+    return DEFAULT_POSITION
 
 
-def save_cache(cache_file, cache, delimiter):
+def save_cache(cache_file, filename, offset, last_line, delimiter=CACHE_DELIMITER):
     """Save cache dictionary to cache file"""
     try:
-        with open(cache_file, 'w+') as fh:
-            for filename, pos_tuple in cache.items():
-                offset, last_line = pos_tuple
-                print(filename, offset, last_line, sep=delimiter, file=fh,
-                      end='' if last_line.endswith('\n') else '\n')
+        with tempfile.NamedTemporaryFile(mode='w') as fh:
+            print(filename, offset, last_line, sep=delimiter, file=fh,
+                  end='' if last_line.endswith('\n') else '\n')
+            line_start = filename + delimiter
+            try:
+                with open(cache_file, 'r') as source_fh:
+                    for line in source_fh:
+                        if not line.startswith(line_start):
+                            print(line, file=fh, end='')
+            except EnvironmentError:
+                pass
+            fh.flush()
+            shutil.copyfile(fh.name, cache_file)
     except EnvironmentError as err:
         logging.error('Failed to save cache: %s', err)
 
@@ -162,29 +170,26 @@ def main():
     args = argument_parsing()
     lvl = logging.DEBUG if args.verbose else logging.WARNING
     logging.basicConfig(stream=sys.stderr, level=lvl, format=LOG_FORMAT, datefmt=DATE_FORMAT)
-    cache = {}
+    filename = os.path.normpath(os.path.abspath(args.logfile))
+    if not os.path.isfile(filename):
+        logging.warning('Log file %s not found', filename)
+        return
     offset, last_line = args.offset, args.last_line
     use_cache = offset is None or last_line is None
     if use_cache:
-        cache = parse_cache(args.cache_file, args.cache_delimiter)
-    for logfile in args.logfile:
-        if not os.path.isfile(logfile):
-            logging.warning('Log file %s not found', logfile)
-            continue
-        filename = os.path.normpath(os.path.abspath(logfile))
-        if use_cache:
-            offset, last_line = cache.get(filename, (0, ''))
-        cutthelog = CutTheLog(filename)
-        try:
-            with cutthelog(offset=offset, last_line=last_line) as fh:
-                for line in fh:
-                    print(line, end='')
-        except EnvironmentError as err:
-            logging.error('Error reading log: %s', err)
-            continue
-        cache[filename] = (cutthelog.offset, cutthelog.last_line)
-    if use_cache:
-        save_cache(args.cache_file, cache, args.cache_delimiter)
+        cached_position = get_position_from_cache(args.cache_file, filename,
+                                                  delimiter=args.cache_delimiter)
+        offset, last_line = cached_position
+    cutthelog = CutTheLog(filename)
+    try:
+        with cutthelog(offset=offset, last_line=last_line) as line_iter:
+            for line in line_iter:
+                print(line, end='')
+    except EnvironmentError as err:
+        logging.error('Error reading log: %s', err)
+    position = cutthelog.get_position()
+    if use_cache and position != cached_position:
+        save_cache(args.cache_file, filename, *position, delimiter=args.cache_delimiter)
 
 
 if __name__ == '__main__':

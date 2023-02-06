@@ -1,0 +1,4 @@
+/root/hello##50##Hello, world
+/root/bad_format##6943# Corrupted cache file
+/root/bad_offset##None##Good line
+/root/unable_to_find

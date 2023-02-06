@@ -2,7 +2,10 @@
 
 
 import os
+import mock
+import shlex
 import unittest
+import subprocess
 
 
 import cutthelog as ctl
@@ -23,7 +26,7 @@ TWO_LINES_POSITION = (len(LINES[0]), LINES[1])
 THREE_LINES_POSITION = (len(LINES[0]) + len(LINES[1]), LINES[2])
 
 
-class TestCutTheLog(unittest.TestCase):
+class TestClass(unittest.TestCase):
     def get_object(self, name=NAME, offset=None, last_line=None):
         filename = os.path.join(DATADIR, name)
         return ctl.CutTheLog(filename, offset, last_line)
@@ -175,6 +178,58 @@ class TestCutTheLog(unittest.TestCase):
         self.assertEqual(obj.get_eof_position(), (0, LONG_LINE))
         obj = self.get_object(TWO_LONG_LINES_NAME)
         self.assertEqual(obj.get_eof_position(), (len(LONG_LINE), LONG_LINE[1:]))
+
+    def test_non_existing_files(self):
+        obj = self.get_object('no-such-file')
+        with self.assertRaises(IOError):
+            with obj:
+                pass
+        obj = self.get_object('no-such-dir/no-such-file')
+        with self.assertRaises(IOError):
+            with obj:
+                pass
+
+
+class TestFunctions(unittest.TestCase):
+    def test_get_position_from_cache(self):
+        def check(filename, check_res, warn=False):
+            with mock.patch('logging.warning') as log_warn:
+                res = ctl.get_position_from_cache(cache_file, filename)
+            self.assertEqual(res, check_res)
+            self.assertEqual(log_warn.called, warn)
+        cache_file = os.path.join(DATADIR, 'cache')
+        check('/root/hello', (50, 'Hello, world\n'))
+        check('/root/no_such_file_in_cache', ctl.DEFAULT_POSITION)
+        check('/root/bad_format', ctl.DEFAULT_POSITION, warn=True)
+        check('/root/bad_offset', ctl.DEFAULT_POSITION, warn=True)
+        check('/root/unable_to_find', ctl.DEFAULT_POSITION)
+
+    def test_save_cache(self):
+        def check(filename, check_res, warn=False):
+            with mock.patch('logging.warning') as log_warn:
+                res = ctl.get_position_from_cache(cache_file, filename)
+
+
+class TestUtil(unittest.TestCase):
+    def tearDown(self):
+        if os.path.exists(ctl.CACHE_FILENAME):
+            os.remove(ctl.CACHE_FILENAME)
+
+    def run_util(self, filename, args=''):
+        filename = os.path.join(DATADIR, filename)
+        cmd = 'python3 ./cutthelog.py {args} {filename}'.format(args=args, filename=filename)
+        proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        return (proc.returncode, stdout, stderr)
+
+    def check(self, filename, args='', rc=0, stdout='', stderr=''):
+        real_rc, real_stdout, real_stderr = self.run_util(filename, *args)
+        self.assertEqual(real_stdout.decode(), stdout)
+        self.assertEqual(real_stderr.decode(), stderr)
+        self.assertEqual(real_rc, rc)
+
+    def test_empty_file(self):
+        self.check('empty')
 
 
 if __name__ == '__main__':
