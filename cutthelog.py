@@ -104,12 +104,12 @@ class CutTheLog(object):
                     last_line_chunks.append(chunk)
         return (offset, ''.join(reversed(last_line_chunks)))
 
-    def _get_file_prefix(self, delimiter):
+    def _get_cache_props(self, delimiter):
         delimiter = delimiter or CACHE_DELIMITER
         return (self.name + delimiter, delimiter)
 
     def set_position_from_cache(self, cache_file, delimiter=None):
-        file_prefix, delimiter = self._get_file_prefix(delimiter)
+        file_prefix, delimiter = self._get_cache_props(delimiter)
         try:
             with open(cache_file, 'r') as fh:
                 line_iter = ((index, line) for index, line in enumerate(fh) if line.startswith(file_prefix))
@@ -128,7 +128,7 @@ class CutTheLog(object):
 
     def save_to_cache(self, cache_file, delimiter=None):
         """Save cache dictionary to cache file"""
-        file_prefix, delimiter = self._get_file_prefix(delimiter)
+        file_prefix, delimiter = self._get_cache_props(delimiter)
         offset, last_line = self.get_position()
         try:
             with tempfile.NamedTemporaryFile(mode='w') as fh:

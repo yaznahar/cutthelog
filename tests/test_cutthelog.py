@@ -4,6 +4,8 @@
 import os
 import mock
 import shlex
+import shutil
+import tempfile
 import unittest
 import subprocess
 
@@ -12,6 +14,7 @@ import cutthelog as ctl
 
 
 DATADIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
+CACHE_FILE = os.path.join(DATADIR, 'cache')
 TEST_POSITIONS = (ctl.DEFAULT_POSITION, (10, 'abc'), (11111, 'xyz'))
 NAME = 'empty'
 ONE_LINE_NAME = 'one_line'
@@ -24,6 +27,11 @@ LINES = ('Hello, world!\n', 'Bye, world\n', 'Hello again')
 ONE_LINE_POSITION = (0, LINES[0])
 TWO_LINES_POSITION = (len(LINES[0]), LINES[1])
 THREE_LINES_POSITION = (len(LINES[0]) + len(LINES[1]), LINES[2])
+
+
+with open(CACHE_FILE, 'r') as fhandler:
+    CACHE_LINES = list(fhandler)
+CACHE_CONTENT = ''.join(CACHE_LINES)
 
 
 class TestClass(unittest.TestCase):
@@ -190,13 +198,12 @@ class TestClass(unittest.TestCase):
                 pass
 
     def test_set_position_from_cache(self):
-        def check(filename, check_res, warn=False):
+        def check(filename, check_res, warn=False, delimiter=None):
             obj = self.get_object(filename)
             with mock.patch('logging.warning') as log_warn:
-                obj.set_position_from_cache(cache_file)
+                obj.set_position_from_cache(CACHE_FILE, delimiter=delimiter)
             self.assertEqual(obj.get_position(), check_res)
             self.assertEqual(log_warn.called, warn)
-        cache_file = os.path.join(DATADIR, 'cache')
         check('/root/hello', (50, 'Hello, world\n'))
         check('/root/hello.2', (100, 'Hello, world!\n'))
         check('/root/hello.3', (200, 'Hello##world!\n'))
@@ -204,6 +211,27 @@ class TestClass(unittest.TestCase):
         check('/root/bad_format', ctl.DEFAULT_POSITION, warn=True)
         check('/root/bad_offset', ctl.DEFAULT_POSITION, warn=True)
         check('/root/unable_to_find', ctl.DEFAULT_POSITION)
+        check('/root/hello', (60, 'Hello, world\n'), delimiter='%%')
+
+    def test_save_to_cache(self):
+        def check(filename, position, last_line, cache_lines, warn=False, delimiter=None):
+            obj = ctl.CutTheLog(filename, position, last_line)
+            with tempfile.NamedTemporaryFile(mode='r') as fh:
+                shutil.copyfile(CACHE_FILE, fh.name)
+                with mock.patch('logging.warning') as log_warn:
+                    obj.save_to_cache(fh.name, delimiter=delimiter)
+                self.assertEqual(log_warn.called, warn)
+                self.assertEqual(fh.read(), ''.join(cache_lines))
+        check('/root/hello.2', 100, 'Hello, world!\n', CACHE_LINES)
+        check('/root/hello.2', 100, 'Hello, world!', CACHE_LINES)
+        cache_lines = CACHE_LINES[2:3] + CACHE_LINES[:2] + CACHE_LINES[3:]
+        check('/root/hello', 50, 'Hello, world', cache_lines)
+        cache_lines = ['/root/unable_to_find##10##aaa\n'] + CACHE_LINES
+        check('/root/unable_to_find', 10, 'aaa', cache_lines)
+        cache_lines = ['/root/hello%%60%%Hello, world\n'] + CACHE_LINES[:-1]
+        check('/root/hello', 60, 'Hello, world', cache_lines, delimiter='%%')
+        cache_lines = ['/root/bad_offset##88##Good line\n'] + CACHE_LINES[:4] + CACHE_LINES[5:]
+        check('/root/bad_offset', 88, 'Good line\n', cache_lines)
 
 
 class TestUtil(unittest.TestCase):
