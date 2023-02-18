@@ -12,6 +12,8 @@ import tempfile
 import argparse
 
 
+VERSION = (1, 0)
+__version__ = '.'.join(map(str, VERSION))
 DEFAULT_POSITION = (0, '')
 DESCRIPTION = ''
 HELPS = {
@@ -21,6 +23,7 @@ HELPS = {
     'last_line': '',
     'cache_delimiter': '',
     'verbose': 'enable verbose mode',
+    'version': 'print utility version and exit',
 }
 LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -150,7 +153,9 @@ class CutTheLog(object):
 def argument_parsing():
     """Parse and return command line arguments"""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument('logfile', help=HELPS['logfile'])
+    main_group = parser.add_mutually_exclusive_group(required=True)
+    main_group.add_argument('logfile', help=HELPS['logfile'], nargs='?')
+    main_group.add_argument('-V', '--version', help=HELPS['version'], action='store_true')
     parser.add_argument('-c', '--cache-file', help=HELPS['cache_file'])
     parser.add_argument('--cache-delimiter', help=HELPS['cache_delimiter'],
                         default=CACHE_DELIMITER)
@@ -169,6 +174,9 @@ def main():
     Main function of command line utility
     """
     args = argument_parsing()
+    if args.version:
+        print(__version__)
+        sys.exit(0)
     lvl = logging.DEBUG if args.verbose else logging.WARNING
     logging.basicConfig(stream=sys.stderr, level=lvl, format=LOG_FORMAT, datefmt=DATE_FORMAT)
     if not os.path.isfile(args.logfile):
