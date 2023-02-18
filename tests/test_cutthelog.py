@@ -2,16 +2,15 @@
 
 
 import os
-import mock
 import shlex
 import shutil
+import subprocess
 import tempfile
 import unittest
-import subprocess
 
+import mock
 
 import cutthelog as ctl
-
 
 DATADIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 CACHE_FILE = os.path.join(DATADIR, 'cache')
@@ -29,8 +28,8 @@ TWO_LINES_POSITION = (len(LINES[0]), LINES[1])
 THREE_LINES_POSITION = (len(LINES[0]) + len(LINES[1]), LINES[2])
 
 
-with open(CACHE_FILE, 'r') as fhandler:
-    CACHE_LINES = list(fhandler)
+with open(CACHE_FILE, 'r') as cache_handler:
+    CACHE_LINES = list(cache_handler)
 CACHE_CONTENT = ''.join(CACHE_LINES)
 
 
@@ -44,11 +43,11 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.name, os.path.join(DATADIR, NAME))
         self.assertEqual(obj.offset, ctl.DEFAULT_POSITION[0])
         self.assertEqual(obj.last_line, ctl.DEFAULT_POSITION[1])
-        self.assertIsNone(obj.fh)
+        self.assertIsNone(obj.fhandler)
         obj = self.get_object(offset=TWO_LINES_POSITION[0], last_line=TWO_LINES_POSITION[1])
         self.assertEqual(obj.offset, TWO_LINES_POSITION[0])
         self.assertEqual(obj.last_line, TWO_LINES_POSITION[1])
-        self.assertIsNone(obj.fh)
+        self.assertIsNone(obj.fhandler)
 
     def test_get_set_position(self):
         obj = self.get_object()
@@ -82,12 +81,12 @@ class TestClass(unittest.TestCase):
         obj = self.get_object()
         with obj as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
-            self.assertIsNotNone(obj.fh)
-            self.assertFalse(obj.fh.closed)
+            self.assertIsNotNone(obj.fhandler)
+            self.assertFalse(obj.fhandler.closed)
             with self.assertRaises(StopIteration):
                 next(line_iter)
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
-        self.assertTrue(obj.fh.closed)
+        self.assertTrue(obj.fhandler.closed)
 
     def test_one_line_file(self):
         obj = self.get_object(ONE_LINE_NAME)
@@ -117,12 +116,12 @@ class TestClass(unittest.TestCase):
         obj = self.get_object(TWO_LINES_NAME)
         with obj(*TWO_LINES_POSITION) as line_iter:
             self.assertEqual(obj.get_position(), TWO_LINES_POSITION)
-            self.assertIsNotNone(obj.fh)
-            self.assertFalse(obj.fh.closed)
+            self.assertIsNotNone(obj.fhandler)
+            self.assertFalse(obj.fhandler.closed)
             with self.assertRaises(StopIteration):
                 next(line_iter)
         self.assertEqual(obj.get_position(), TWO_LINES_POSITION)
-        self.assertTrue(obj.fh.closed)
+        self.assertTrue(obj.fhandler.closed)
 
     def test_with_statement_with_invalid_last_line(self):
         obj = self.get_object(TWO_LINES_NAME)
@@ -216,12 +215,12 @@ class TestClass(unittest.TestCase):
     def test_save_to_cache(self):
         def check(filename, position, last_line, cache_lines, warn=False, delimiter=None):
             obj = ctl.CutTheLog(filename, position, last_line)
-            with tempfile.NamedTemporaryFile(mode='r') as fh:
-                shutil.copyfile(CACHE_FILE, fh.name)
+            with tempfile.NamedTemporaryFile(mode='r') as fhandler:
+                shutil.copyfile(CACHE_FILE, fhandler.name)
                 with mock.patch('logging.warning') as log_warn:
-                    obj.save_to_cache(fh.name, delimiter=delimiter)
+                    obj.save_to_cache(fhandler.name, delimiter=delimiter)
                 self.assertEqual(log_warn.called, warn)
-                self.assertEqual(fh.read(), ''.join(cache_lines))
+                self.assertEqual(fhandler.read(), ''.join(cache_lines))
         check('/root/hello.2', 100, 'Hello, world!\n', CACHE_LINES)
         check('/root/hello.2', 100, 'Hello, world!', CACHE_LINES)
         cache_lines = CACHE_LINES[2:3] + CACHE_LINES[:2] + CACHE_LINES[3:]
@@ -246,11 +245,11 @@ class TestUtil(unittest.TestCase):
         stdout, stderr = proc.communicate()
         return (proc.returncode, stdout, stderr)
 
-    def check(self, filename, args='', rc=0, stdout='', stderr=''):
+    def check(self, filename, args='', returncode=0, stdout='', stderr=''):
         real_rc, real_stdout, real_stderr = self.run_util(filename, *args)
         self.assertEqual(real_stdout.decode(), stdout)
         self.assertEqual(real_stderr.decode(), stderr)
-        self.assertEqual(real_rc, rc)
+        self.assertEqual(real_rc, returncode)
 
     def test_empty_file(self):
         self.check('empty')

@@ -4,13 +4,12 @@
 
 from __future__ import print_function
 
-import os
-import sys
-import shutil
-import logging
-import tempfile
 import argparse
-
+import logging
+import os
+import shutil
+import sys
+import tempfile
 
 VERSION = (1, 0)
 __version__ = '.'.join(map(str, VERSION))
@@ -31,14 +30,14 @@ CACHE_DELIMITER = '##'
 CACHE_FILENAME = '.cutthelog'
 
 
-class CutTheLog(object):
+class CutTheLog:
     """Class to parse log file"""
     def __init__(self, name, offset=None, last_line=None):
         """Initialize object to work with log file"""
         self.name = os.path.normpath(os.path.abspath(name))
         self.offset = None
         self.last_line = None
-        self.fh = None
+        self.fhandler = None
         self.set_position(offset, last_line)
 
     def get_position(self):
@@ -55,31 +54,31 @@ class CutTheLog(object):
 
     def __enter__(self):
         """Return iterator of lines of the log file"""
-        fh = open(self.name, 'r')
+        fhandler = open(self.name, 'r')
         offset, last_line = self.get_position()
         try:
-            fh.seek(offset)
-            line = next(fh)
+            fhandler.seek(offset)
+            line = next(fhandler)
             if line.rstrip('\n') != last_line.rstrip('\n'):
                 raise StopIteration
         except (IOError, StopIteration):
-            fh.seek(0)
+            fhandler.seek(0)
             self.set_position()
-        self.fh = fh
+        self.fhandler = fhandler
         return iter(self)
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Close the log file"""
-        if self.fh is not None and not self.fh.closed:
-            self.fh.close()
+        if self.fhandler is not None and not self.fhandler.closed:
+            self.fhandler.close()
 
     def __iter__(self):
         """Iterator through lines of the log file"""
-        if self.fh is None or self.fh.closed:
+        if self.fhandler is None or self.fhandler.closed:
             return
         offset, last_line = self.get_position()
         offset_change = len(last_line)
-        for line in self.fh:
+        for line in self.fhandler:
             offset += offset_change
             self.set_position(offset, line)
             yield line
@@ -89,22 +88,21 @@ class CutTheLog(object):
         """Return offset and last line without the whole file reading"""
         chunk_size = 512
         last_line_chunks = []
-        with open(self.name, 'r') as fh:
-            fh.seek(0, os.SEEK_END)
-            offset = fh.tell()
+        with open(self.name, 'r') as fhandler:
+            fhandler.seek(0, os.SEEK_END)
+            offset = fhandler.tell()
             while offset > 0:
                 step = min(chunk_size, offset)
                 offset -= step
-                fh.seek(offset, os.SEEK_SET)
-                chunk = fh.read(step)
+                fhandler.seek(offset, os.SEEK_SET)
+                chunk = fhandler.read(step)
                 start, end = (None, None) if last_line_chunks else (0, step - 1)
                 last_line_pos = chunk.rfind('\n', start, end) + 1
                 if last_line_pos > 0:
                     offset += last_line_pos
                     last_line_chunks.append(chunk[last_line_pos:])
                     break
-                else:
-                    last_line_chunks.append(chunk)
+                last_line_chunks.append(chunk)
         return (offset, ''.join(reversed(last_line_chunks)))
 
     def _get_cache_props(self, delimiter):
@@ -114,8 +112,9 @@ class CutTheLog(object):
     def set_position_from_cache(self, cache_file, delimiter=None):
         file_prefix, delimiter = self._get_cache_props(delimiter)
         try:
-            with open(cache_file, 'r') as fh:
-                line_iter = ((index, line) for index, line in enumerate(fh) if line.startswith(file_prefix))
+            with open(cache_file, 'r') as fhandler:
+                line_iter = ((index, line) for index, line in enumerate(fhandler)
+                             if line.startswith(file_prefix))
                 index, line = next(line_iter, (None, None))
                 if line is not None:
                     splitted_line = line.split(delimiter, 2)
@@ -123,7 +122,8 @@ class CutTheLog(object):
                         try:
                             self.set_position(int(splitted_line[1]), splitted_line[2])
                         except ValueError:
-                            logging.warning('Malformed offset value %s in line #%d', splitted_line[1], index)
+                            logging.warning('Malformed offset value %s in line #%d',
+                                            splitted_line[1], index)
                     else:
                         logging.warning('Malformed cache line #%d: %s', index, line.rstrip())
         except (EnvironmentError, UnicodeDecodeError) as err:
@@ -134,18 +134,18 @@ class CutTheLog(object):
         file_prefix, delimiter = self._get_cache_props(delimiter)
         offset, last_line = self.get_position()
         try:
-            with tempfile.NamedTemporaryFile(mode='w') as fh:
-                print(self.name, offset, last_line, sep=delimiter, file=fh,
+            with tempfile.NamedTemporaryFile(mode='w') as fhandler:
+                print(self.name, offset, last_line, sep=delimiter, file=fhandler,
                       end='' if last_line.endswith('\n') else '\n')
                 try:
-                    with open(cache_file, 'r') as source_fh:
-                        for line in source_fh:
+                    with open(cache_file, 'r') as source_fhandler:
+                        for line in source_fhandler:
                             if not line.startswith(file_prefix):
-                                print(line, file=fh, end='')
+                                print(line, file=fhandler, end='')
                 except (EnvironmentError, UnicodeEncodeError):
                     pass
-                fh.flush()
-                shutil.copyfile(fh.name, cache_file)
+                fhandler.flush()
+                shutil.copyfile(fhandler.name, cache_file)
         except (EnvironmentError, UnicodeEncodeError) as err:
             logging.error('Failed to save cache: %s', err)
 
