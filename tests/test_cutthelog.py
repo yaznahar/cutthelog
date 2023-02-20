@@ -12,23 +12,23 @@ import cutthelog as ctl
 
 DATADIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 CACHE_FILE = os.path.join(DATADIR, 'cache')
-TEST_POSITIONS = (ctl.DEFAULT_POSITION, (10, 'abc'), (11111, 'xyz'))
+TEST_POSITIONS = (ctl.DEFAULT_POSITION, (10, b'abc'), (11111, b'xyz'))
 NAME = 'empty'
 ONE_LINE_NAME = 'one_line'
 TWO_LINES_NAME = 'two_lines'
 THREE_LINES_NAME = 'three_lines'
 LONG_LINE_NAME = 'long_line'
 TWO_LONG_LINES_NAME = 'two_long_lines'
-LONG_LINE = ''.join(str(i) for i in range(1, 501)) + '\n'
-LINES = ('Hello, world!\n', 'Bye, world\n', 'Hello again')
+LONG_LINE = b''.join(str(i).encode() for i in range(1, 501)) + ctl.EOL
+LINES = (b'Hello, world!\n', b'Bye, world\n', b'Hello again')
 ONE_LINE_POSITION = (0, LINES[0])
 TWO_LINES_POSITION = (len(LINES[0]), LINES[1])
 THREE_LINES_POSITION = (len(LINES[0]) + len(LINES[1]), LINES[2])
 
 
-with open(CACHE_FILE, 'r') as cache_handler:
+with open(CACHE_FILE, 'rb') as cache_handler:
     CACHE_LINES = list(cache_handler)
-CACHE_CONTENT = ''.join(CACHE_LINES)
+CACHE_CONTENT = b''.join(CACHE_LINES)
 
 
 class TestClass(unittest.TestCase):
@@ -123,7 +123,7 @@ class TestClass(unittest.TestCase):
 
     def test_with_statement_with_invalid_last_line(self):
         obj = self.get_object(TWO_LINES_NAME)
-        with obj(offset=TWO_LINES_POSITION[0], last_line='abc\n') as line_iter:
+        with obj(offset=TWO_LINES_POSITION[0], last_line=b'abc\n') as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertEqual(next(line_iter), LINES[0])
 
@@ -199,34 +199,34 @@ class TestClass(unittest.TestCase):
             obj = self.get_object(filename)
             obj.set_position_from_cache(CACHE_FILE, delimiter=delimiter)
             self.assertEqual(obj.get_position(), check_res)
-        check('/root/hello', (50, 'Hello, world\n'))
-        check('/root/hello.2', (100, 'Hello, world!\n'))
-        check('/root/hello.3', (200, 'Hello##world!\n'))
+        check('/root/hello', (50, b'Hello, world\n'))
+        check('/root/hello.2', (100, b'Hello, world!\n'))
+        check('/root/hello.3', (200, b'Hello##world!\n'))
         check('/root/no_such_file_in_cache', ctl.DEFAULT_POSITION)
         with self.assertRaises(ctl.CutthelogCacheError):
             check('/root/bad_format', ctl.DEFAULT_POSITION)
         with self.assertRaises(ctl.CutthelogCacheError):
             check('/root/bad_offset', ctl.DEFAULT_POSITION)
         check('/root/unable_to_find', ctl.DEFAULT_POSITION)
-        check('/root/hello', (60, 'Hello, world\n'), delimiter='%%')
+        check('/root/hello', (60, b'Hello, world\n'), delimiter='%%')
 
     def test_save_to_cache(self):
         def check(filename, position, last_line, cache_lines, delimiter=None):
             obj = ctl.CutTheLog(filename, position, last_line)
-            with tempfile.NamedTemporaryFile(mode='r') as fhandler:
+            with tempfile.NamedTemporaryFile(mode='rb') as fhandler:
                 shutil.copyfile(CACHE_FILE, fhandler.name)
                 obj.save_to_cache(fhandler.name, delimiter=delimiter)
-                self.assertEqual(fhandler.read(), ''.join(cache_lines))
-        check('/root/hello.2', 100, 'Hello, world!\n', CACHE_LINES)
-        check('/root/hello.2', 100, 'Hello, world!', CACHE_LINES)
+                self.assertEqual(fhandler.read(), b''.join(cache_lines))
+        check('/root/hello.2', 100, b'Hello, world!\n', CACHE_LINES)
+        check('/root/hello.2', 100, b'Hello, world!', CACHE_LINES)
         cache_lines = CACHE_LINES[2:3] + CACHE_LINES[:2] + CACHE_LINES[3:]
-        check('/root/hello', 50, 'Hello, world', cache_lines)
-        cache_lines = ['/root/unable_to_find##10##aaa\n'] + CACHE_LINES
-        check('/root/unable_to_find', 10, 'aaa', cache_lines)
-        cache_lines = ['/root/hello%%60%%Hello, world\n'] + CACHE_LINES[:-1]
-        check('/root/hello', 60, 'Hello, world', cache_lines, delimiter='%%')
-        cache_lines = ['/root/bad_offset##88##Good line\n'] + CACHE_LINES[:4] + CACHE_LINES[5:]
-        check('/root/bad_offset', 88, 'Good line\n', cache_lines)
+        check('/root/hello', 50, b'Hello, world', cache_lines)
+        cache_lines = [b'/root/unable_to_find##10##aaa\n'] + CACHE_LINES
+        check('/root/unable_to_find', 10, b'aaa', cache_lines)
+        cache_lines = [b'/root/hello%%60%%Hello, world\n'] + CACHE_LINES[:-1]
+        check('/root/hello', 60, b'Hello, world', cache_lines, delimiter='%%')
+        cache_lines = [b'/root/bad_offset##88##Good line\n'] + CACHE_LINES[:4] + CACHE_LINES[5:]
+        check('/root/bad_offset', 88, b'Good line\n', cache_lines)
 
 
 class TestUtil(unittest.TestCase):

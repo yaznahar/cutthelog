@@ -3,8 +3,6 @@
 """Print only unseen tailing part of log file"""
 
 
-from __future__ import print_function
-
 import argparse
 import logging
 import os
@@ -14,9 +12,10 @@ import tempfile
 
 VERSION = (1, 0, 0)
 __version__ = '.'.join(map(str, VERSION))
-DEFAULT_POSITION = (0, '')
+DEFAULT_POSITION = (0, b'')
 LOG_FORMAT = '%(levelname)s: %(message)s'
 CACHE_DELIMITER = '##'
+EOL = b'\n'
 CACHE_FILENAME = '.cutthelog'
 HELPS = {
     'logfile': 'path of the file to read',
@@ -77,12 +76,12 @@ class CutTheLog:
 
         If position is wrong reset it to the start of the file
         Return iterator over unseen lines"""
-        fhandler = open(self.name, 'r')
+        fhandler = open(self.name, 'rb')
         offset, last_line = self.get_position()
         try:
             fhandler.seek(offset)
             line = next(fhandler)
-            if line.rstrip('\n') != last_line.rstrip('\n'):
+            if line.rstrip(EOL) != last_line.rstrip(EOL):
                 raise StopIteration
         except (IOError, StopIteration):
             fhandler.seek(0)
@@ -114,7 +113,7 @@ class CutTheLog:
         """Return offset and value of the last line without reading of the whole file"""
         chunk_size = 512
         last_line_chunks = []
-        with open(self.name, 'r') as fhandler:
+        with open(self.name, 'rb') as fhandler:
             fhandler.seek(0, os.SEEK_END)
             offset = fhandler.tell()
             while offset > 0:
@@ -123,17 +122,17 @@ class CutTheLog:
                 fhandler.seek(offset, os.SEEK_SET)
                 chunk = fhandler.read(step)
                 start, end = (None, None) if last_line_chunks else (0, step - 1)
-                last_line_pos = chunk.rfind('\n', start, end) + 1
+                last_line_pos = chunk.rfind(EOL, start, end) + 1
                 if last_line_pos > 0:
                     offset += last_line_pos
                     last_line_chunks.append(chunk[last_line_pos:])
                     break
                 last_line_chunks.append(chunk)
-        return (offset, ''.join(reversed(last_line_chunks)))
+        return (offset, b''.join(reversed(last_line_chunks)))
 
     def _get_cache_props(self, delimiter):
         delimiter = delimiter or CACHE_DELIMITER
-        return (self.name + delimiter, delimiter)
+        return (self.name.encode() + delimiter.encode(), delimiter.encode())
 
     def set_position_from_cache(self, cache_file, delimiter=None):
         """Set file position from cache
@@ -159,7 +158,7 @@ class CutTheLog:
         """
         file_prefix, delimiter = self._get_cache_props(delimiter)
         try:
-            with open(cache_file, 'r') as fhandler:
+            with open(cache_file, 'rb') as fhandler:
                 line_iter = ((index, line) for index, line in enumerate(fhandler)
                              if line.startswith(file_prefix))
                 index, line = next(line_iter, (None, None))
@@ -174,7 +173,7 @@ class CutTheLog:
                     else:
                         msg = 'Malformed cache line #{}: {}'.format(index, line.rstrip())
                         raise CutthelogCacheError(msg)
-        except (EnvironmentError, UnicodeDecodeError) as err:
+        except EnvironmentError as err:
             raise CutthelogCacheError('Failed to read cache: ' + str(err))
 
     def save_to_cache(self, cache_file, delimiter=None):
@@ -200,16 +199,24 @@ class CutTheLog:
         file_prefix, delimiter = self._get_cache_props(delimiter)
         offset, last_line = self.get_position()
         try:
-            with tempfile.NamedTemporaryFile(mode='w') as fhandler:
-                print(self.name, offset, last_line, sep=delimiter, file=fhandler,
-                      end='' if last_line.endswith('\n') else '\n')
-                with open(cache_file, 'r') as source_fhandler:
-                    for line in source_fhandler:
-                        if not line.startswith(file_prefix):
-                            print(line, file=fhandler, end='')
+            with tempfile.NamedTemporaryFile(mode='wb') as fhandler:
+                fhandler.write(self.name.encode())
+                fhandler.write(delimiter)
+                fhandler.write(str(offset).encode())
+                fhandler.write(delimiter)
+                fhandler.write(last_line)
+                if not last_line.endswith(EOL):
+                    fhandler.write(EOL)
+                try:
+                    with open(cache_file, 'rb') as source_fhandler:
+                        for line in source_fhandler:
+                            if not line.startswith(file_prefix):
+                                fhandler.write(line)
+                except EnvironmentError:
+                    pass
                 fhandler.flush()
                 shutil.copyfile(fhandler.name, cache_file)
-        except (EnvironmentError, UnicodeEncodeError) as err:
+        except EnvironmentError as err:
             msg = 'Failed to save cache: ' + str(err)
             raise CutthelogCacheError(msg)
 
@@ -249,20 +256,21 @@ def main():
         logging.error('No permission to read "%s"', args.logfile)
         return 2
     cutthelog = CutTheLog(args.logfile)
-    try:
-        cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
-    except CutthelogCacheError as err:
-        logging.error(err)
-        return 4
-    cached_position = cutthelog.get_position()
+    if os.path.isfile(args.cache_file):
+        try:
+            cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
+        except CutthelogCacheError as err:
+            logging.error(err)
+            return 4
+    initial_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
             for line in line_iter:
-                print(line, end='')
-    except (EnvironmentError, UnicodeDecodeError) as err:
+                sys.stdout.buffer.write(line)
+    except EnvironmentError as err:
         logging.error('Failed to read file: %s', err)
         return 3
-    if cutthelog.get_position() != cached_position:
+    if cutthelog.get_position() != initial_position:
         try:
             cutthelog.save_to_cache(args.cache_file, delimiter=args.cache_delimiter)
         except CutthelogCacheError as err:
