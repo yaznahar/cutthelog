@@ -8,8 +8,6 @@ import subprocess
 import tempfile
 import unittest
 
-import mock
-
 import cutthelog as ctl
 
 DATADIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
@@ -197,29 +195,27 @@ class TestClass(unittest.TestCase):
                 pass
 
     def test_set_position_from_cache(self):
-        def check(filename, check_res, warn=False, delimiter=None):
+        def check(filename, check_res, delimiter=None):
             obj = self.get_object(filename)
-            with mock.patch('logging.warning') as log_warn:
-                obj.set_position_from_cache(CACHE_FILE, delimiter=delimiter)
+            obj.set_position_from_cache(CACHE_FILE, delimiter=delimiter)
             self.assertEqual(obj.get_position(), check_res)
-            self.assertEqual(log_warn.called, warn)
         check('/root/hello', (50, 'Hello, world\n'))
         check('/root/hello.2', (100, 'Hello, world!\n'))
         check('/root/hello.3', (200, 'Hello##world!\n'))
         check('/root/no_such_file_in_cache', ctl.DEFAULT_POSITION)
-        check('/root/bad_format', ctl.DEFAULT_POSITION, warn=True)
-        check('/root/bad_offset', ctl.DEFAULT_POSITION, warn=True)
+        with self.assertRaises(ctl.CutthelogCacheError):
+            check('/root/bad_format', ctl.DEFAULT_POSITION)
+        with self.assertRaises(ctl.CutthelogCacheError):
+            check('/root/bad_offset', ctl.DEFAULT_POSITION)
         check('/root/unable_to_find', ctl.DEFAULT_POSITION)
         check('/root/hello', (60, 'Hello, world\n'), delimiter='%%')
 
     def test_save_to_cache(self):
-        def check(filename, position, last_line, cache_lines, warn=False, delimiter=None):
+        def check(filename, position, last_line, cache_lines, delimiter=None):
             obj = ctl.CutTheLog(filename, position, last_line)
             with tempfile.NamedTemporaryFile(mode='r') as fhandler:
                 shutil.copyfile(CACHE_FILE, fhandler.name)
-                with mock.patch('logging.warning') as log_warn:
-                    obj.save_to_cache(fhandler.name, delimiter=delimiter)
-                self.assertEqual(log_warn.called, warn)
+                obj.save_to_cache(fhandler.name, delimiter=delimiter)
                 self.assertEqual(fhandler.read(), ''.join(cache_lines))
         check('/root/hello.2', 100, 'Hello, world!\n', CACHE_LINES)
         check('/root/hello.2', 100, 'Hello, world!', CACHE_LINES)

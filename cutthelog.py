@@ -11,7 +11,7 @@ import shutil
 import sys
 import tempfile
 
-VERSION = (1, 0)
+VERSION = (1, 0, 0)
 __version__ = '.'.join(map(str, VERSION))
 DEFAULT_POSITION = (0, '')
 DESCRIPTION = ''
@@ -28,6 +28,14 @@ LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 CACHE_DELIMITER = '##'
 CACHE_FILENAME = '.cutthelog'
+
+
+class CutthelogError(Exception):
+    """General module exception"""
+
+
+class CutthelogCacheError(CutthelogError):
+    """Error on cache interaction"""
 
 
 class CutTheLog:
@@ -67,14 +75,17 @@ class CutTheLog:
         self.fhandler = fhandler
         return iter(self)
 
+    def _is_file_opened(self):
+        return self.fhandler is not None and not self.fhandler.closed
+
     def __exit__(self, exc_type, exc_value, traceback):
         """Close the log file"""
-        if self.fhandler is not None and not self.fhandler.closed:
+        if self._is_file_opened():
             self.fhandler.close()
 
     def __iter__(self):
         """Iterator through lines of the log file"""
-        if self.fhandler is None or self.fhandler.closed:
+        if not self._is_file_opened():
             return
         offset, last_line = self.get_position()
         offset_change = len(last_line)
@@ -122,12 +133,13 @@ class CutTheLog:
                         try:
                             self.set_position(int(splitted_line[1]), splitted_line[2])
                         except ValueError:
-                            logging.warning('Malformed offset value %s in line #%d',
-                                            splitted_line[1], index)
+                            msg = 'Bad offset {0} in line #{1}'.format(splitted_line[1], index)
+                            raise CutthelogCacheError(msg)
                     else:
-                        logging.warning('Malformed cache line #%d: %s', index, line.rstrip())
+                        msg = 'Malformed cache line #{0}: {1}'.format(index, line.rstrip())
+                        raise CutthelogCacheError(msg)
         except (EnvironmentError, UnicodeDecodeError) as err:
-            logging.warning('Failed to read cache: %s', err)
+            raise CutthelogCacheError('Failed to read cache: ' + str(err))
 
     def save_to_cache(self, cache_file, delimiter=None):
         """Save cache dictionary to cache file"""
@@ -137,17 +149,15 @@ class CutTheLog:
             with tempfile.NamedTemporaryFile(mode='w') as fhandler:
                 print(self.name, offset, last_line, sep=delimiter, file=fhandler,
                       end='' if last_line.endswith('\n') else '\n')
-                try:
-                    with open(cache_file, 'r') as source_fhandler:
-                        for line in source_fhandler:
-                            if not line.startswith(file_prefix):
-                                print(line, file=fhandler, end='')
-                except (EnvironmentError, UnicodeEncodeError):
-                    pass
+                with open(cache_file, 'r') as source_fhandler:
+                    for line in source_fhandler:
+                        if not line.startswith(file_prefix):
+                            print(line, file=fhandler, end='')
                 fhandler.flush()
                 shutil.copyfile(fhandler.name, cache_file)
         except (EnvironmentError, UnicodeEncodeError) as err:
-            logging.error('Failed to save cache: %s', err)
+            msg = 'Failed to save cache: ' + str(err)
+            raise CutthelogCacheError(msg)
 
 
 def argument_parsing():
@@ -176,16 +186,20 @@ def main():
     args = argument_parsing()
     if args.version:
         print(__version__)
-        sys.exit(0)
+        return 0
     lvl = logging.DEBUG if args.verbose else logging.WARNING
     logging.basicConfig(stream=sys.stderr, level=lvl, format=LOG_FORMAT, datefmt=DATE_FORMAT)
     if not os.path.isfile(args.logfile):
-        logging.warning('Log file %s not found', args.logfile)
-        return
+        logging.error('Log file %s not found', args.logfile)
+        return 2
     cutthelog = CutTheLog(args.logfile, args.offset, args.last_line)
     use_cache = args.offset is None or args.last_line is None
     if use_cache:
-        cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
+        try:
+            cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
+        except CutthelogCacheError as err:
+            logging.error(err)
+            return 4
     cached_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
@@ -193,9 +207,15 @@ def main():
                 print(line, end='')
     except (EnvironmentError, UnicodeDecodeError) as err:
         logging.error('Error reading file: %s', err)
+        return 3
     if use_cache and cutthelog.get_position() != cached_position:
-        cutthelog.save_to_cache(args.cache_file, delimiter=args.cache_delimiter)
+        try:
+            cutthelog.save_to_cache(args.cache_file, delimiter=args.cache_delimiter)
+        except CutthelogCacheError as err:
+            logging.error(err)
+            return 4
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
