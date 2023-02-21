@@ -10,7 +10,7 @@ import shutil
 import sys
 import tempfile
 
-VERSION = (1, 0, 0)
+VERSION = (0, 9, 0)
 __version__ = '.'.join(map(str, VERSION))
 DEFAULT_POSITION = (0, b'')
 LOG_FORMAT = '%(levelname)s: %(message)s'
