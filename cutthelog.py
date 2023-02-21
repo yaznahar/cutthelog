@@ -18,10 +18,9 @@ CACHE_DELIMITER = '##'
 EOL = b'\n'
 CACHE_FILENAME = '.cutthelog'
 HELPS = {
-    'logfile': 'path of the file to read',
-    'cache_file': ('path to the cache file (by default used {} in the home or '
-                   'current folder)'.format(CACHE_FILENAME)),
-    'cache_delimiter': 'delimiter used inside cache record (by default "{}")'.format(CACHE_DELIMITER),
+    'logfile': 'path of a file to print',
+    'cache_file': 'path of the cache file',
+    'cache_delimiter': 'delimiter of cache record (by default "{}")'.format(CACHE_DELIMITER),
     'verbose': 'enable verbose mode',
     'version': 'print utility version and exit',
 }
@@ -32,51 +31,65 @@ class CutthelogError(Exception):
 
 
 class CutthelogCacheError(CutthelogError):
-    """Error on cache interaction"""
+    """Error of cache interaction"""
 
 
 class CutTheLog:
-    """An object to read a single text file from cache postition
+    """A class to read a single file from cache postition"""
 
-    Parameters
-    ----------
-    name : |str|
-        An absolute or relative path to the text file.
-    offset : |int|, optional
-        The file position of the last line read on the last interaction
-    last_line : |str|, optional
-        The value of the last line read on the last interaction
-    """
-    def __init__(self, name, offset=None, last_line=None):
-        self.name = os.path.normpath(os.path.abspath(name))
+    def __init__(self, path, offset=None, last_line=None):
+        """An object initilization
+
+        Parameters
+        ----------
+        path : |str|
+            An absolute or relative path of a file to read
+        offset : |int|, optional
+            The file position of the last line read on the last interaction
+        last_line : |bytes|, optional
+            The value of the last line read on the last interaction
+        """
+        self.path = os.path.normpath(os.path.abspath(path))
         self.offset = None
         self.last_line = None
         self.fhandler = None
         self.set_position(offset, last_line)
 
     def get_position(self):
+        """Return position stored in the object"""
         return (self.offset, self.last_line)
 
     def set_position(self, offset=None, last_line=None):
+        """Set internal object position or reset it without arguments"""
         self.offset = offset or DEFAULT_POSITION[0]
         self.last_line = last_line or DEFAULT_POSITION[1]
 
     def __call__(self, offset=None, last_line=None):
         """Allow to set position inside with statement like
 
+        Parameters
+        ----------
+        offset : |int|, optional
+            The file position of the last line read on the last interaction
+        last_line : |bytes|, optional
+            The value of the last line read on the last interaction
+
+        Examples
+        --------
         >>> cutthelog = CutTheLog('/var/log/kern.log')
-        >>> with cutthelog(offset=2605148, last_line='Feb 20 11:22:57 ...') as line_iter:
-        ...     print(*line_iter, sep='')
+        >>> with cutthelog(offset=2605148, last_line=b'Feb 20 11:22:57 ...') as line_iter:
+        ...     for line in line_iter:
+        ...         print(line.encode(), end='')
         """
         self.set_position(offset, last_line)
         return self
 
     def __enter__(self):
-        """Open the file and check if the position is correct
+        """Open the file and check whether the position is correct
 
-        If position is wrong reset it to the start of the file
-        Return iterator over unseen lines"""
-        fhandler = open(self.name, 'rb')
+        If check fails and the position resets to the start of the file.
+        Return iterator over unseen byte lines"""
+        fhandler = open(self.path, 'rb')
         offset, last_line = self.get_position()
         try:
             fhandler.seek(offset)
@@ -98,7 +111,10 @@ class CutTheLog:
             self.fhandler.close()
 
     def __iter__(self):
-        """Iterator through lines of the file"""
+        """Iterator over lines of the file
+
+        It's intended only for using inside the __enter__ method
+        when the file is opened"""
         if not self.is_file_opened():
             return
         offset, last_line = self.get_position()
@@ -110,10 +126,16 @@ class CutTheLog:
             offset_change = len(line)
 
     def get_eof_position(self):
-        """Return offset and value of the last line without reading of the whole file"""
+        """Return offset and value of the last line without reading of the whole file
+
+        Raises
+        ------
+        EnvironmentError
+            On failed file opening or reading
+        """
         chunk_size = 512
         last_line_chunks = []
-        with open(self.name, 'rb') as fhandler:
+        with open(self.path, 'rb') as fhandler:
             fhandler.seek(0, os.SEEK_END)
             offset = fhandler.tell()
             while offset > 0:
@@ -132,10 +154,10 @@ class CutTheLog:
 
     def _get_cache_props(self, delimiter):
         delimiter = delimiter or CACHE_DELIMITER
-        return (self.name.encode() + delimiter.encode(), delimiter.encode())
+        return (self.path.encode() + delimiter.encode(), delimiter.encode())
 
     def set_position_from_cache(self, cache_file, delimiter=None):
-        """Set file position from cache
+        """Set the internal position from cache file
 
         If there is no file record in the cache object position doesn't change
         A cache record of a file looks like
@@ -200,7 +222,7 @@ class CutTheLog:
         offset, last_line = self.get_position()
         try:
             with tempfile.NamedTemporaryFile(mode='wb') as fhandler:
-                fhandler.write(self.name.encode())
+                fhandler.write(self.path.encode())
                 fhandler.write(delimiter)
                 fhandler.write(str(offset).encode())
                 fhandler.write(delimiter)

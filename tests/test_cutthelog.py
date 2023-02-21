@@ -32,13 +32,13 @@ CACHE_CONTENT = b''.join(CACHE_LINES)
 
 
 class TestClass(unittest.TestCase):
-    def get_object(self, name=NAME, offset=None, last_line=None):
-        filename = os.path.join(DATADIR, name)
-        return ctl.CutTheLog(filename, offset, last_line)
+    def get_object(self, path=NAME, offset=None, last_line=None):
+        filepath = os.path.join(DATADIR, path)
+        return ctl.CutTheLog(filepath, offset, last_line)
 
     def test_init(self):
         obj = self.get_object()
-        self.assertEqual(obj.name, os.path.join(DATADIR, NAME))
+        self.assertEqual(obj.path, os.path.join(DATADIR, NAME))
         self.assertEqual(obj.offset, ctl.DEFAULT_POSITION[0])
         self.assertEqual(obj.last_line, ctl.DEFAULT_POSITION[1])
         self.assertIsNone(obj.fhandler)
