@@ -262,6 +262,35 @@ def argument_parsing():
     return args
 
 
+def check_logfile(path):
+    if not os.path.isfile(path):
+        logging.error(NOT_FOUND, path)
+        return 66
+    if not os.access(path, os.R_OK):
+        logging.error(NO_PERMISSION, path)
+        return 77
+    return 0
+
+
+def check_cache_file(path):
+    if os.path.isfile(path):
+        if not os.access(path, os.R_OK | os.W_OK):
+            logging.error(NO_PERMISSION, path)
+            return 77
+    else:
+        cache_dir = os.path.dirname(path)
+        if not os.path.isdir(cache_dir) or not os.access(cache_dir, os.R_OK | os.W_OK):
+            logging.error(NO_PERMISSION, path)
+            return 77
+        try:
+            with open(path, 'wb'):
+                pass
+        except EnvironmentError as err:
+            logging.error('Failed to create file: %s', err)
+            return 74
+    return 0
+
+
 def main():
     """The cutthelog command line utility
 
@@ -273,19 +302,15 @@ def main():
         return 0
     lvl = logging.DEBUG if args.verbose else logging.WARNING
     logging.basicConfig(stream=sys.stderr, level=lvl, format=LOG_FORMAT)
-    if not os.path.isfile(args.logfile):
-        logging.error(NOT_FOUND, args.logfile)
-        return 66
-    if not os.access(args.logfile, os.R_OK):
-        logging.error(NO_PERMISSION, args.logfile)
-        return 77
+    returncode = check_logfile(args.logfile) or check_cache_file(args.cache_file)
+    if returncode:
+        return returncode
     cutthelog = CutTheLog(args.logfile)
-    if os.path.isfile(args.cache_file):
-        try:
-            cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
-        except CutthelogCacheError as err:
-            logging.error(err)
-            return 74
+    try:
+        cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
+    except CutthelogCacheError as err:
+        logging.error(err)
+        return 74
     initial_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
