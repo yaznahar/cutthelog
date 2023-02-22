@@ -31,24 +31,29 @@ with open(CACHE_FILE, 'rb') as cache_handler:
 CACHE_CONTENT = b''.join(CACHE_LINES)
 
 
-class TestClass(unittest.TestCase):
-    def get_object(self, path=NAME, offset=None, last_line=None):
-        filepath = os.path.join(DATADIR, path)
-        return ctl.CutTheLog(filepath, offset, last_line)
+def get_data_file_path(filename):
+    return os.path.join(DATADIR, filename)
 
+
+def get_object(path=NAME, offset=None, last_line=None):
+    filepath = get_data_file_path(path)
+    return ctl.CutTheLog(filepath, offset, last_line)
+
+
+class TestClass(unittest.TestCase):
     def test_init(self):
-        obj = self.get_object()
-        self.assertEqual(obj.path, os.path.join(DATADIR, NAME))
+        obj = get_object()
+        self.assertEqual(obj.path, get_data_file_path(NAME))
         self.assertEqual(obj.offset, ctl.DEFAULT_POSITION[0])
         self.assertEqual(obj.last_line, ctl.DEFAULT_POSITION[1])
         self.assertIsNone(obj.fhandler)
-        obj = self.get_object(offset=TWO_LINES_POSITION[0], last_line=TWO_LINES_POSITION[1])
+        obj = get_object(offset=TWO_LINES_POSITION[0], last_line=TWO_LINES_POSITION[1])
         self.assertEqual(obj.offset, TWO_LINES_POSITION[0])
         self.assertEqual(obj.last_line, TWO_LINES_POSITION[1])
         self.assertIsNone(obj.fhandler)
 
     def test_get_set_position(self):
-        obj = self.get_object()
+        obj = get_object()
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
         obj.set_position()
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
@@ -59,7 +64,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
 
     def test_call(self):
-        obj = self.get_object()
+        obj = get_object()
         obj()
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
         for pos in TEST_POSITIONS:
@@ -69,14 +74,14 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
 
     def test_iter(self):
-        obj = self.get_object()
+        obj = get_object()
         with self.assertRaises(StopIteration):
             next(iter(obj))
         with obj as line_iter:
             self.assertIs(iter(line_iter), line_iter)
 
     def test_with_statement(self):
-        obj = self.get_object()
+        obj = get_object()
         with obj as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertIsNotNone(obj.fhandler)
@@ -87,7 +92,7 @@ class TestClass(unittest.TestCase):
         self.assertTrue(obj.fhandler.closed)
 
     def test_one_line_file(self):
-        obj = self.get_object(ONE_LINE_NAME)
+        obj = get_object(ONE_LINE_NAME)
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
         with obj as line_iter:
             self.assertEqual(next(line_iter), LINES[0])
@@ -100,7 +105,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), ONE_LINE_POSITION)
 
     def test_two_lines_file(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
         with obj as line_iter:
             self.assertEqual(tuple(line_iter), LINES[:2])
@@ -111,7 +116,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), TWO_LINES_POSITION)
 
     def test_with_statement_with_valid_position(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj(*TWO_LINES_POSITION) as line_iter:
             self.assertEqual(obj.get_position(), TWO_LINES_POSITION)
             self.assertIsNotNone(obj.fhandler)
@@ -122,31 +127,31 @@ class TestClass(unittest.TestCase):
         self.assertTrue(obj.fhandler.closed)
 
     def test_with_statement_with_invalid_last_line(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj(offset=TWO_LINES_POSITION[0], last_line=b'abc\n') as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertEqual(next(line_iter), LINES[0])
 
     def test_with_statement_with_invalid_position_value(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj(offset=4, last_line=ONE_LINE_POSITION[1]) as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertEqual(next(line_iter), LINES[0])
 
     def test_with_statement_with_out_of_file_position_value(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj(offset=1000, last_line=ONE_LINE_POSITION[1]) as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertEqual(next(line_iter), LINES[0])
 
     def test_with_statement_with_end_of_file_position_value(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj(offset=THREE_LINES_POSITION[0], last_line='') as line_iter:
             self.assertEqual(obj.get_position(), ctl.DEFAULT_POSITION)
             self.assertEqual(next(line_iter), LINES[0])
 
     def test_two_lines_file_separated_read(self):
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         with obj as line_iter:
             self.assertEqual(next(line_iter), LINES[0])
         self.assertEqual(obj.get_position(), ONE_LINE_POSITION)
@@ -155,13 +160,13 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), TWO_LINES_POSITION)
 
     def test_file_witout_eol_before_eof(self):
-        obj = self.get_object(THREE_LINES_NAME)
+        obj = get_object(THREE_LINES_NAME)
         with obj as line_iter:
             self.assertEqual(tuple(line_iter), LINES[:3])
         self.assertEqual(obj.get_position(), THREE_LINES_POSITION)
 
     def test_position_in_file_witout_eol_before_eof(self):
-        obj = self.get_object(THREE_LINES_NAME)
+        obj = get_object(THREE_LINES_NAME)
         with obj(*THREE_LINES_POSITION) as line_iter:
             self.assertEqual(obj.get_position(), THREE_LINES_POSITION)
             with self.assertRaises(StopIteration):
@@ -169,34 +174,34 @@ class TestClass(unittest.TestCase):
         self.assertEqual(obj.get_position(), THREE_LINES_POSITION)
 
     def test_get_eof_position(self):
-        obj = self.get_object(NAME)
+        obj = get_object(NAME)
         self.assertEqual(obj.get_eof_position(), ctl.DEFAULT_POSITION)
-        obj = self.get_object(ONE_LINE_NAME)
+        obj = get_object(ONE_LINE_NAME)
         self.assertEqual(obj.get_eof_position(), ONE_LINE_POSITION)
-        obj = self.get_object(TWO_LINES_NAME)
+        obj = get_object(TWO_LINES_NAME)
         self.assertEqual(obj.get_eof_position(), TWO_LINES_POSITION)
-        obj = self.get_object(THREE_LINES_NAME)
+        obj = get_object(THREE_LINES_NAME)
         self.assertEqual(obj.get_eof_position(), THREE_LINES_POSITION)
 
     def test_get_eof_position_on_long_lines(self):
-        obj = self.get_object(LONG_LINE_NAME)
+        obj = get_object(LONG_LINE_NAME)
         self.assertEqual(obj.get_eof_position(), (0, LONG_LINE))
-        obj = self.get_object(TWO_LONG_LINES_NAME)
+        obj = get_object(TWO_LONG_LINES_NAME)
         self.assertEqual(obj.get_eof_position(), (len(LONG_LINE), LONG_LINE[1:]))
 
     def test_non_existing_files(self):
-        obj = self.get_object('no-such-file')
+        obj = get_object('no-such-file')
         with self.assertRaises(IOError):
             with obj:
                 pass
-        obj = self.get_object('no-such-dir/no-such-file')
+        obj = get_object('no-such-dir/no-such-file')
         with self.assertRaises(IOError):
             with obj:
                 pass
 
     def test_set_position_from_cache(self):
         def check(filename, check_res, delimiter=None):
-            obj = self.get_object(filename)
+            obj = get_object(filename)
             obj.set_position_from_cache(CACHE_FILE, delimiter=delimiter)
             self.assertEqual(obj.get_position(), check_res)
         check('/root/hello', (50, b'Hello, world\n'))
@@ -230,25 +235,64 @@ class TestClass(unittest.TestCase):
 
 
 class TestUtil(unittest.TestCase):
-    def tearDown(self):
-        if os.path.exists(ctl.CACHE_FILENAME):
-            os.remove(ctl.CACHE_FILENAME)
+    cmd_tmpl = 'python3 ./cutthelog.py -c {cache_file} {filename}'
 
-    def run_util(self, filename, args=''):
-        filename = os.path.join(DATADIR, filename)
-        cmd = 'python3 ./cutthelog.py {args} {filename}'.format(args=args, filename=filename)
+    def setUp(self):
+        file_id, self.cache_file = tempfile.mkstemp(prefix='cutthelog_cache_')
+        os.close(file_id)
+
+    def tearDown(self):
+        if os.path.exists(self.cache_file):
+            os.remove(self.cache_file)
+
+    def run_util(self, filename, cache_file=None):
+        filename = get_data_file_path(filename)
+        cache_file = cache_file or self.cache_file
+        cmd = self.cmd_tmpl.format(cache_file=cache_file, filename=filename)
         proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         return (proc.returncode, stdout, stderr)
 
-    def check(self, filename, args='', returncode=0, stdout='', stderr=''):
-        real_rc, real_stdout, real_stderr = self.run_util(filename, *args)
-        self.assertEqual(real_stdout.decode(), stdout)
-        self.assertEqual(real_stderr.decode(), stderr)
+    def check(self, filename, returncode=0, stdout='', stderr='', cache='', cache_file=None):
+        real_rc, real_stdout, real_stderr = self.run_util(filename, cache_file=cache_file)
+        stdout = stdout if isinstance(stdout, bytes) else stdout.encode()
+        stderr = stderr if isinstance(stderr, bytes) else stderr.encode()
+        self.assertEqual(real_stdout, stdout)
+        self.assertEqual(real_stderr.rstrip(ctl.EOL), stderr)
         self.assertEqual(real_rc, returncode)
+        if cache is not None:
+            with open(cache_file or self.cache_file, 'rb') as fhanlder:
+                self.assertEqual(fhanlder.read().decode(), cache)
 
     def test_empty_file(self):
         self.check('empty')
+
+    def test_nonexistant_file(self):
+        filename = 'no-such-file'
+        stderr = 'ERROR: ' + ctl.NOT_FOUND % get_data_file_path(filename)
+        self.check(filename, returncode=66, stderr=stderr)
+
+    def test_no_perm_file(self):
+        with tempfile.NamedTemporaryFile() as fhandler:
+            filename = fhandler.name
+            os.chmod(filename, 0o000)
+            stderr = 'ERROR: ' + ctl.NO_PERMISSION % filename
+            self.check(filename, returncode=77, stderr=stderr)
+
+    def test_one_line_file(self):
+        self.check('one_line', stdout=LINES[0], cache=None)
+
+    def test_cache_in_nonexistant_directory(self):
+        cache_file = '/no-such-dir/no-such-file'
+        stderr = 'ERROR: ' + ctl.NO_PERMISSION % cache_file
+        self.check('one_line', returncode=77, cache_file=cache_file, stderr=stderr, cache=None)
+
+    def test_no_write_perm_cache_file(self):
+        with tempfile.NamedTemporaryFile() as fhandler:
+            cache_file = fhandler.name
+            os.chmod(cache_file, 0o400)
+            stderr = 'ERROR: ' + ctl.NO_PERMISSION % cache_file
+            self.check('one_line', returncode=77, cache_file=cache_file, stderr=stderr, cache=None)
 
 
 if __name__ == '__main__':

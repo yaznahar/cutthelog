@@ -24,6 +24,8 @@ HELPS = {
     'verbose': 'enable verbose mode',
     'version': 'print utility version and exit',
 }
+NOT_FOUND = 'File "%s" not found'
+NO_PERMISSION = 'No permission to read "%s"'
 
 
 class CutthelogError(Exception):
@@ -272,18 +274,18 @@ def main():
     lvl = logging.DEBUG if args.verbose else logging.WARNING
     logging.basicConfig(stream=sys.stderr, level=lvl, format=LOG_FORMAT)
     if not os.path.isfile(args.logfile):
-        logging.error('File "%s" not found', args.logfile)
-        return 2
+        logging.error(NOT_FOUND, args.logfile)
+        return 66
     if not os.access(args.logfile, os.R_OK):
-        logging.error('No permission to read "%s"', args.logfile)
-        return 2
+        logging.error(NO_PERMISSION, args.logfile)
+        return 77
     cutthelog = CutTheLog(args.logfile)
     if os.path.isfile(args.cache_file):
         try:
             cutthelog.set_position_from_cache(args.cache_file, delimiter=args.cache_delimiter)
         except CutthelogCacheError as err:
             logging.error(err)
-            return 4
+            return 74
     initial_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
@@ -291,13 +293,13 @@ def main():
                 sys.stdout.buffer.write(line)
     except EnvironmentError as err:
         logging.error('Failed to read file: %s', err)
-        return 3
+        return 74
     if cutthelog.get_position() != initial_position:
         try:
             cutthelog.save_to_cache(args.cache_file, delimiter=args.cache_delimiter)
         except CutthelogCacheError as err:
             logging.error(err)
-            return 4
+            return 74
     return 0
 
 
