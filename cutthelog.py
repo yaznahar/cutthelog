@@ -119,11 +119,10 @@ class CutTheLog:
         when the file is opened"""
         if not self.is_file_opened():
             return
-        offset, last_line = self.get_position()
-        offset_change = len(last_line)
+        offset_change = len(self.last_line)
         for line in self.fhandler:
-            offset += offset_change
-            self.set_position(offset, line)
+            self.offset += offset_change
+            self.last_line = line
             yield line
             offset_change = len(line)
 
