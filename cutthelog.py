@@ -314,8 +314,7 @@ def main():
     initial_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
-            for line in line_iter:
-                sys.stdout.buffer.write(line)
+            sys.stdout.buffer.writelines(line_iter)
     except EnvironmentError as err:
         logging.error('Failed to read file: %s', err)
         return 74
