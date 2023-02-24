@@ -25,7 +25,7 @@ HELPS = {
     'version': 'print utility version and exit',
 }
 NOT_FOUND = 'File "%s" not found'
-NO_PERMISSION = 'No permission to read "%s"'
+NO_PERMISSION = 'No permission to %s "%s"'
 
 
 class CutthelogError(Exception):
@@ -266,7 +266,7 @@ def check_logfile(path):
         logging.error(NOT_FOUND, path)
         return 66
     if not os.access(path, os.R_OK):
-        logging.error(NO_PERMISSION, path)
+        logging.error(NO_PERMISSION, 'read', path)
         return 77
     return 0
 
@@ -274,12 +274,15 @@ def check_logfile(path):
 def check_cache_file(path):
     if os.path.isfile(path):
         if not os.access(path, os.R_OK | os.W_OK):
-            logging.error(NO_PERMISSION, path)
+            logging.error(NO_PERMISSION, 'read/write', path)
             return 77
     else:
         cache_dir = os.path.dirname(path)
-        if not os.path.isdir(cache_dir) or not os.access(cache_dir, os.R_OK | os.W_OK):
-            logging.error(NO_PERMISSION, path)
+        if not os.path.isdir(cache_dir):
+            logging.error(NOT_FOUND, cache_dir)
+            return 74
+        if not os.access(cache_dir, os.R_OK | os.W_OK):
+            logging.error(NO_PERMISSION, 'read/write', cache_dir)
             return 77
         try:
             with open(path, 'wb'):

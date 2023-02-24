@@ -276,22 +276,32 @@ class TestUtil(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as fhandler:
             filename = fhandler.name
             os.chmod(filename, 0o000)
-            stderr = 'ERROR: ' + ctl.NO_PERMISSION % filename
+            stderr = 'ERROR: ' + ctl.NO_PERMISSION % ('read', filename)
             self.check(filename, returncode=77, stderr=stderr)
 
     def test_one_line_file(self):
         self.check('one_line', stdout=LINES[0], cache=None)
 
     def test_cache_in_nonexistant_directory(self):
-        cache_file = '/no-such-dir/no-such-file'
-        stderr = 'ERROR: ' + ctl.NO_PERMISSION % cache_file
+        cache_dir = '/no-such-dir'
+        cache_file = os.path.join(cache_dir, 'no-such-file')
+        stderr = 'ERROR: ' + ctl.NOT_FOUND % cache_dir
+        self.check('one_line', returncode=74, cache_file=cache_file, stderr=stderr, cache=None)
+
+    def test_cache_in_no_permission_directory(self):
+        cache_dir = tempfile.mkdtemp()
+        os.chmod(cache_dir, 0o400)
+        cache_file = os.path.join(cache_dir, 'no-such-file')
+        stderr = 'ERROR: ' + ctl.NO_PERMISSION % ('read/write', cache_dir)
         self.check('one_line', returncode=77, cache_file=cache_file, stderr=stderr, cache=None)
+        os.chmod(cache_dir, 0o700)
+        os.rmdir(cache_dir)
 
     def test_no_write_perm_cache_file(self):
         with tempfile.NamedTemporaryFile() as fhandler:
             cache_file = fhandler.name
             os.chmod(cache_file, 0o400)
-            stderr = 'ERROR: ' + ctl.NO_PERMISSION % cache_file
+            stderr = 'ERROR: ' + ctl.NO_PERMISSION % ('read/write', cache_file)
             self.check('one_line', returncode=77, cache_file=cache_file, stderr=stderr, cache=None)
 
 
