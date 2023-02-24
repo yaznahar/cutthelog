@@ -1,5 +1,5 @@
 from setuptools import setup
-from cutthelog import __version__
+from cutthelog import __version__, __doc__
 
 
 with open('README.rst') as fhandler:
@@ -12,7 +12,7 @@ setup(
     author='Alexander Larin',
     author_email='yaznahar@yandex.ru',
     url='https://github.com/yaznahar/cutthelog',
-    description='Reading of unseen tailing part of a log/text file',
+    description=__doc__.splitlines()[0],
     long_description=long_description,
     license='MIT license',
     classifiers=[

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Print only unseen tailing part of log file"""
+"""Print an unseen tailing part of a log file"""
 
 
 import argparse
