@@ -305,5 +305,9 @@ class TestUtil(unittest.TestCase):
             self.check('one_line', returncode=77, cache_file=cache_file, stderr=stderr, cache=None)
 
 
+class TestUtilWithPython2(unittest.TestCase):
+    cmd_tmpl = 'python2 ./cutthelog.py -c {cache_file} {filename}'
+
+
 if __name__ == '__main__':
     unittest.main()

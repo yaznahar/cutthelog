@@ -10,7 +10,7 @@ import shutil
 import sys
 import tempfile
 
-VERSION = (0, 9, 1)
+VERSION = (0, 9, 2)
 __version__ = '.'.join(map(str, VERSION))
 DEFAULT_POSITION = (0, b'')
 LOG_FORMAT = '%(levelname)s: %(message)s'
@@ -316,7 +316,8 @@ def main():
     initial_position = cutthelog.get_position()
     try:
         with cutthelog as line_iter:
-            sys.stdout.buffer.writelines(line_iter)
+            stdout = sys.stdout.buffer if hasattr(sys.stdout, 'buffer') else sys.stdout
+            stdout.writelines(line_iter)
     except EnvironmentError as err:
         logging.error('Failed to read file: %s', err)
         return 74
